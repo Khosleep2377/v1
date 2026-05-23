@@ -858,5 +858,4 @@ while ($true) {
             Write-Host "INVALID" -ForegroundColor Red 
             Start-Sleep 1
         }
-    }
-}
+ }

@@ -106,11 +106,6 @@ function Show-Login {
 
             if ($try -ge $MAX_TRY) {
 
-... (576 บรรทัด)
-
-New Text Document.ps1
-27 KB
-น้อวนิว ผู้พิทักษ์โลก [aiko],  — 13:48
 
 $Host.UI.RawUI.WindowTitle = "SETTING"
 

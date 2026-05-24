@@ -307,7 +307,6 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32Priority
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ8Priority /t REG_DWORD /d 1 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ16Priority /t REG_DWORD /d 2 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v AdjustDpcThreshold /t REG_DWORD /d 800 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v DeepIoCoalescingEnabled /t REG_DWORD /d 1 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IdealDpcRate /t REG_DWORD /d 800 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v ForegroundBoost /t REG_DWORD /d 2 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v SchedulerAssistThreadFlagOverride /t REG_DWORD /d 1 /f
@@ -318,10 +317,8 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v SystemRespons
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v AVX2PriorityBoost /t REG_DWORD /d 1 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32TimeSlice /t REG_DWORD /d 1 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQPriority /t REG_DWORD /d 1 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v MaximumBuffers /t REG_DWORD /d 1 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v MinimumBuffers /t REG_DWORD /d 1 /f
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v TimeoutSecs /t REG_DWORD /d 1 /f
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ***Priority /t REG_DWORD /d 1 /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ***Priority /t REG_DWORD /d 2 /f
 
     # =========================================================
     # IPV6

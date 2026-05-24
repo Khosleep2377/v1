@@ -883,7 +883,7 @@ Run-Safe "powercfg /changename $guid Zeacross Zeacross diwa"
 # CPU STABLE MODE
 # =========================
 
-Run-Safe "powercfg /setacvalueindex $guid SUB_PROCESSOR PROCTHROTTLEMIN 70"
+Run-Safe "powercfg /setacvalueindex $guid SUB_PROCESSOR PROCTHROTTLEMIN 85"
 Run-Safe "powercfg /setacvalueindex $guid SUB_PROCESSOR PROCTHROTTLEMAX 100"
 Run-Safe "powercfg /setacvalueindex $guid SUB_PROCESSOR PERFBOOSTMODE 1"
 Run-Safe "powercfg /setacvalueindex $guid SUB_PROCESSOR SYSTEMCOOLINGPOLICY 1"

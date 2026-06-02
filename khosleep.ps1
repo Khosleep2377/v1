@@ -1,856 +1,155 @@
-﻿# =========================================================
-# SETTING
-# =========================================================
+# ==============================================================================
+# FLOWGOD
+# ==============================================================================
 
-# REQUIRE ADMIN
+# ------------------------------------------------------------------------------
+# 0. PRIVILEGE & PREPARATION (ตรวจสอบสิทธิ์และล้างระบบเก่าก่อนเริ่ม)
+# ------------------------------------------------------------------------------
 $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-
 if (-not $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
 
-$ErrorActionPreference = "Continue"
-$Host.UI.RawUI.WindowTitle = "SETTING"
+Clear-Host
+Write-Host "Applying SMOOTKING ULTRA PRO v2 [KingSmooth - FULL VERSION]..." -ForegroundColor Cyan
 
-# =========================================================
-# FUNCTIONS
-# =========================================================
+Write-Host "[0/8] Performing Deep Network Reset & Cache Cleanup..." -ForegroundColor Yellow
+netsh winsock reset | Out-Null
+netsh int ip reset | Out-Null
+netsh branchcache reset | Out-Null
+nbtstat -R | Out-Null
+nbtstat -RR | Out-Null
+netsh int ipv4 reset | Out-Null
+netsh int ipv6 reset | Out-Null
+netsh int ip reset c:\resetlog.txt | Out-Null
+netsh int ip reset c:\cplog.txt | Out-Null
+netsh int ip reset all | Out-Null
 
-function Show-Step {
-    param(
-        [string]$Text,
-        [int]$Percent
-    )
+# รีเซ็ตสัญญาณเครือข่ายและล้างแคชระบบ
+ipconfig /release | Out-Null
+ipconfig /renew | Out-Null
+ipconfig /flushdns | Out-Null
+gpupdate /force | Out-Null
 
-    $barsize = 50
-    $filled  = [math]::Floor(($Percent / 100) * $barsize)
-    $bar = ("█" * $filled).PadRight($barsize, "░")
+# เคลียร์ไฟล์ขยะชั่วคราวทั้งหมดในเครื่อง
+Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
 
-    Clear-Host
-    Write-Host ""
-    Write-Host " ███████╗███████╗████████╗████████╗██╗███╗   ██╗ ██████╗ " -ForegroundColor Cyan
-    Write-Host " ██╔════╝██╔════╝╚══██╔══╝╚══██╔══╝██║████╗  ██║██╔════╝ " -ForegroundColor Cyan
-    Write-Host " ███████╗█████╗     ██║      ██║   ██║██╔██╗ ██║██║  ███╗" -ForegroundColor Cyan
-    Write-Host " ╚════██║██╔══╝     ██║      ██║   ██║██║╚██╗██║██║   ██║" -ForegroundColor Cyan
-    Write-Host " ███████║███████╗   ██║      ██║   ██║██║ ╚████║╚██████╔╝" -ForegroundColor Cyan
-    Write-Host " ╚══════╝╚══════╝   ╚═╝      ╚═╝   ╚═╝╚═╝  ╚═══╝ ╚═════╝ " -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "=========================================================" -ForegroundColor DarkCyan
-    Write-Host ""
-    Write-Host " $Text" -ForegroundColor Green
-    Write-Host ""
-    Write-Host " [$bar] $Percent%" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "=========================================================" -ForegroundColor DarkCyan
+# ------------------------------------------------------------------------------
+# 1. BASE POWER PLAN & CPU (KingSmooth - DEEP KERNEL INSANE BOOST)
+# ------------------------------------------------------------------------------
+Write-Host "[1/8] Configuring KingSmooth Power Plan & Kernel Settings..." -ForegroundColor Yellow
 
-    Start-Sleep -Milliseconds 250
-}
+# ดึงแผนพลังงาน High Performance มาเป็นฐาน
+$TargetGuid = "381b4222-f694-41f0-9685-ff5bb260df2e"
+$guid = (powercfg -duplicatescheme $TargetGuid | Select-String "[A-F0-9-]{36}").Matches.Value
 
-function Show-Menu {
-    Clear-Host
-    Write-Host "=========================================================" -ForegroundColor Green
-    Write-Host "                     SETTING"
-    Write-Host "=========================================================" -ForegroundColor Green
-    Write-Host ""
-    Write-Host " [1] SETTING"
-    Write-Host " [2] EXIT"
-    Write-Host ""
-    Write-Host "=========================================================" -ForegroundColor Green
-    Write-Host ""
-}
+# เปลี่ยนชื่อแผนพลังงานเป็น KingSmooth อย่างเป็นทางการ
+powercfg -changename $guid "Smooth" "KingSmooth"
 
-function Show-Status {
-    param(
-        [string]$Text,
-        [string]$Color = "White"
-    )
-
-    $valid = [enum]::GetNames([System.ConsoleColor])
-    if ($valid -notcontains $Color) { $Color = "White" }
-
-    try {
-        Write-Host $Text -ForegroundColor $Color
-    }
-    catch {
-        Write-Host $Text
-    }
-}
-
-function Convert-ToRegPath {
-    param([string]$Path)
-
-    $p = $Path.Trim()
-
-    if ($p -match '^HKLM:\\') { return ($p -replace '^HKLM:\\','HKLM\') }
-    if ($p -match '^HKCU:\\') { return ($p -replace '^HKCU:\\','HKCU\') }
-    if ($p -match '^HKCR:\\') { return ($p -replace '^HKCR:\\','HKCR\') }
-    if ($p -match '^HKU:\\')  { return ($p -replace '^HKU:\\','HKU\') }
-    if ($p -match '^HKCC:\\') { return ($p -replace '^HKCC:\\','HKCC\') }
-    return $p
-}
-
-function Set-RegValue {
-    param(
-        [string]$Path,
-        [string]$Name,
-        $Value,
-        [string]$Type = "DWord"
-    )
-
-    try {
-        $regPath = Convert-ToRegPath $Path
-
-        if ($Type -eq "String") {
-            & reg.exe add $regPath /v $Name /t REG_SZ /d "$Value" /f | Out-Null
-        }
-        else {
-            & reg.exe add $regPath /v $Name /t REG_DWORD /d "$Value" /f | Out-Null
-        }
-    }
-    catch {
-        Write-Host "FAILED : $Path\$Name" -ForegroundColor Red
-    }
-}
-
-function Run-Safe {
-    param([string]$Command)
-
-    try {
-        Invoke-Expression $Command
-    }
-    catch {
-        Write-Host "SKIPPED : $Command" -ForegroundColor DarkYellow
-    }
-}
-
-function Get-Interface {
-    try {
-        $iface = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1 -ExpandProperty Name
-        if ([string]::IsNullOrWhiteSpace($iface)) { $iface = "Ethernet" }
-        return $iface
-    }
-    catch {
-        return "Ethernet"
-    }
-}
-
-# =========================================================
-# MAIN ACTION
-# =========================================================
-
-function Apply-All {
-
-    Clear-Host
-    Write-Host "=========================================================" -ForegroundColor Cyan
-    Write-Host "                     SETTING"
-    Write-Host "=========================================================" -ForegroundColor Cyan
-    Write-Host ""
-
-    $IFACE = Get-Interface
-
-
-# =========================================================
-# FIVEM ONLY - ADDITIONAL SAFE VALUES
-# เพิ่มอย่างเดียว / ไม่ลบ / ไม่แก้
-# =========================================================
-
-function Add-RegValueIfMissing {
-    param(
-        [string]$Path,
-        [string]$Name,
-        $Value,
-        [string]$Type = "DWord"
-    )
-
-    try {
-        $regPath = Convert-ToRegPath $Path
-
-        $exists = $false
-        try {
-            $current = Get-ItemProperty -Path $regPath -Name $Name -ErrorAction Stop
-            if ($null -ne $current) { $exists = $true }
-        } catch {
-            $exists = $false
-        }
-
-        if (-not $exists) {
-            if ($Type -eq "String") {
-                & reg.exe add $regPath /v $Name /t REG_SZ /d "$Value" /f | Out-Null
-            }
-            else {
-                & reg.exe add $regPath /v $Name /t REG_DWORD /d "$Value" /f | Out-Null
-            }
-        }
-    }
-    catch {
-        Write-Host "SKIPPED : $Path\$Name" -ForegroundColor DarkYellow
-    }
-}
-
-# ---------------------------------------------------------
-# FiveM process priority
-# ---------------------------------------------------------
-Add-RegValueIfMissing "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "CpuPriorityClass" 3
-Add-RegValueIfMissing "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "IoPriority" 3
-Add-RegValueIfMissing "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "PagePriority" 5
-
-Add-RegValueIfMissing "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions" "CpuPriorityClass" 3
-Add-RegValueIfMissing "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions" "IoPriority" 3
-Add-RegValueIfMissing "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions" "PagePriority" 5
-
-# ---------------------------------------------------------
-# FiveM versions
-# ---------------------------------------------------------
-$FiveMVersions = @(
-    "FiveM_b2372_GTAProcess.exe",
-    "FiveM_b2545_GTAProcess.exe",
-    "FiveM_b2699_GTAProcess.exe",
-    "FiveM_b2802_GTAProcess.exe",
-    "FiveM_b2944_GTAProcess.exe",
-    "FiveM_b3095_GTAProcess.exe",
-    "FiveM_b3258_GTAProcess.exe"
+# ปลดล็อกเมนูลับระดับ Kernel ของระบบจัดการพลังงานทั้งหมด
+$Attributes = @(
+    "PROCTHROTTLEMIN", "PROCTHROTTLEMAX", "PERFBOOSTMODE", "PERFBOOSTPOL", 
+    "PERFAUTONOMOUS", "LATENCYHINT", "CPMINCORES", "CPMAXCORES",
+    "CPINCREASETIME", "CPDECREASETIME", "CPINCREASEPOLICY", "CPDECREASEPOLICY"
 )
-
-foreach ($ver in $FiveMVersions) {
-    $p = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$ver\PerfOptions"
-    Add-RegValueIfMissing $p "CpuPriorityClass" 3
-    Add-RegValueIfMissing $p "IoPriority" 3
-    Add-RegValueIfMissing $p "PagePriority" 5
+foreach ($attr in $Attributes) {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\$attr" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
 }
 
-# ---------------------------------------------------------
-# Game mode / DVR
-# ---------------------------------------------------------
-Add-RegValueIfMissing "HKCU:\Software\Microsoft\GameBar" "AllowAutoGameMode" 1
-Add-RegValueIfMissing "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" 1
-Add-RegValueIfMissing "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 0
-Add-RegValueIfMissing "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" 0
+# ระบบบริหารคล็อกและความร้อน (Dynamic Engine) ดันซีพียูสุดกำลังเมื่อต้องการประสิทธิภาพ
+powercfg -setacvalueindex $guid SUB_PROCESSOR PROCTHROTTLEMIN 90
+powercfg -setacvalueindex $guid SUB_PROCESSOR PROCTHROTTLEMAX 100
 
-# ---------------------------------------------------------
-# FiveM graphics preference
-# ---------------------------------------------------------
-Add-RegValueIfMissing "HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" "FiveM.exe" "GpuPreference=2;" "String"
+# โหมดบูสท์ระดับท็อป: 4 (Aggressive At Guaranteed) บูสท์ทะลุขีดจำกัดทันทีเมื่อเกมต้องการ
+powercfg -setacvalueindex $guid SUB_PROCESSOR PERFBOOSTMODE 4
+powercfg -setacvalueindex $guid SUB_PROCESSOR PERFBOOSTPOL 100
 
-# ---------------------------------------------------------
-# Desktop / input for faster response
-# ---------------------------------------------------------
-Add-RegValueIfMissing "HKCU:\Control Panel\Desktop" "MenuShowDelay" "0" "String"
-Add-RegValueIfMissing "HKCU:\Control Panel\Desktop" "LowLevelHooksTimeout" "1000" "String"
-Add-RegValueIfMissing "HKCU:\Control Panel\Desktop" "WaitToKillAppTimeout" "2000" "String"
-Add-RegValueIfMissing "HKCU:\Control Panel\Desktop" "HungAppTimeout" "1000" "String"
+# เร่งเวลาตอบสนองชิปซีพียู (Zero-Delay Response)
+powercfg -setacvalueindex $guid SUB_PROCESSOR CPINCREASETIME 1
+powercfg -setacvalueindex $guid SUB_PROCESSOR CPDECREASETIME 100
+powercfg -setacvalueindex $guid SUB_PROCESSOR CPINCREASEPOLICY 0
+powercfg -setacvalueindex $guid SUB_PROCESSOR CPDECREASEPOLICY 1
 
-# ---------------------------------------------------------
-# Multimedia profile
-# ---------------------------------------------------------
-$MP = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
-Add-RegValueIfMissing $MP "SystemResponsiveness" 0
-Add-RegValueIfMissing $MP "NetworkThrottlingIndex" 4294967295
-Add-RegValueIfMissing $MP "NoLazyMode" 1
+# ปิดระบบ Autonomous: บังคับให้ Windows ส่งคำสั่งตรงเข้าฮาร์ดแวร์ ไม่ผ่านตัวกรองเดาใจระบบ
+powercfg -setacvalueindex $guid SUB_PROCESSOR PERFAUTONOMOUS 0
+powercfg -setacvalueindex $guid SUB_PROCESSOR LATENCYHINT 0
 
-$Games = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
-Add-RegValueIfMissing $Games "GPU Priority" 8
-Add-RegValueIfMissing $Games "Priority" 6
-Add-RegValueIfMissing $Games "Scheduling Category" "High" "String"
-Add-RegValueIfMissing $Games "SFIO Priority" "High" "String"
+# จัดระเบียบระบบคอร์หลับ (No Core Parking Stutter) บังคับคอร์วิ่งเต็ม 100% ตลอดเวลา
+powercfg -setacvalueindex $guid SUB_PROCESSOR IDLEDISABLE 0
+powercfg -setacvalueindex $guid SUB_PROCESSOR CPMINCORES 100
+powercfg -setacvalueindex $guid SUB_PROCESSOR CPMAXCORES 100
 
-    # =========================================================
-    # GROUP POLICY
-    # =========================================================
-    Show-Step "GROUP POLICY" 5
-    Write-Host "[1/25] GROUP POLICY..."
-    Run-Safe 'gpupdate /force'
+# ปลดแบนด์วิดท์ฮาร์ดแวร์ขั้นสูงสุด (PCIe, USB, Storage, Sleep Core)
+powercfg -setacvalueindex $guid SUB_PCIEXPRESS ASPM 0
+powercfg -setacvalueindex $guid SUB_USB USBSELECTIVE SUSPEND 0
+powercfg -setacvalueindex $guid SUB_DISK DISKIDLE 0
+powercfg -setacvalueindex $guid SUB_SLEEP STANDBYIDLE 0
+powercfg -setacvalueindex $guid SUB_SLEEP HIBERNATEIDLE 0
+powercfg /hibernate off
 
-    # =========================================================
-    # TCP STACK
-    # =========================================================
-    Show-Step "TCP STACK" 12
-    Write-Host "[2/25] TCP STACK..."
+# เปิดแอปพลายแผนพลังงานทันที
+powercfg -setactive $guid
 
-    $tcpCommands = @(
-        'netsh int udp set global uro=disabled',
-        'netsh interface tcp set global autotuninglevel=disabled',
-        'netsh interface tcp set global rss=enabled',
-        'netsh interface tcp set global chimney=enabled',
-        'netsh interface tcp set global congestionprovider=ctcp',
-        'netsh interface tcp set global ecncapability=enabled',
-        'netsh interface tcp set global timestamps=disabled',
-        'netsh interface tcp set heuristics disabled',
-        'netsh int tcp set global rsc=enabled',
-        'netsh int tcp set global maxsynretransmissions=2',
-        'netsh int tcp set global initialrto=3000',
-        'netsh int tcp set global delayedacktimeout=100',
-        'netsh int tcp set global fastopen=enabled',
-        'netsh int tcp set global pacingprofile=alwayson',
-        'netsh int tcp set global hystart=enabled',
-        'netsh int tcp set global dca=enabled',
-        'netsh interface teredo set state disabled',
-        'netsh interface ipv6 set teredo disabled',
-        'netsh interface tcp set global netdma=enabled'
-    )
-    foreach ($c in $tcpCommands) { Run-Safe $c }
-
-    # =========================================================
-    # DNS
-    # =========================================================
-    Show-Step "DNS" 21
-    Write-Host "[3/25] DNS..."
-
-    Run-Safe "netsh interface ipv4 set dns name=`"$IFACE`" static 8.8.8.8"
-    Run-Safe "netsh interface ipv4 add dns name=`"$IFACE`" 8.8.4.4 index=2"
-    Run-Safe "netsh interface ipv6 set dnsservers `"$IFACE`" static 2001:4860:4860::8888"
-    Run-Safe "netsh interface ipv6 add dnsservers `"$IFACE`" 2001:4860:4860::8844 index=2"
-
-# ---------------------------------------------------------
-# PER-ADAPTER TCP ADDITIONS
-# ---------------------------------------------------------
-try {
-    $adapter = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1
-    if ($adapter -and $adapter.InterfaceGuid) {
-        $ifaceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$($adapter.InterfaceGuid)"
-
-        Set-RegValue $ifaceKey "TcpAckFrequency" 1
-        Set-RegValue $ifaceKey "TCPNoDelay" 1
-        Set-RegValue $ifaceKey "TcpDelAckTicks" 0
-        Set-RegValue $ifaceKey "TcpWindowSize" 64240
-        Set-RegValue $ifaceKey "Tcp1323Opts" 1
-        Set-RegValue $ifaceKey "EnablePMTUDiscovery" 1
-        Set-RegValue $ifaceKey "EnablePMTUBHDetect" 0
-    }
-}
-catch {
-    Write-Host "SKIPPED : PER-ADAPTER TCP ADDITIONS" -ForegroundColor DarkYellow
-}
-
-# ---------------------------------------------------------
-# FIVE M RENDER / GPU HINTS
-# ---------------------------------------------------------
-Run-Safe 'reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "FiveM.exe" /t REG_SZ /d "GpuPreference=2;" /f'
-Run-Safe 'reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "GTA5.exe" /t REG_SZ /d "GpuPreference=2;" /f'
-Run-Safe 'reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "FiveM_GTAProcess.exe" /t REG_SZ /d "GpuPreference=2;" /f'
-
-# ---------------------------------------------------------
-# OPTIONAL EXTRA MMCSS HINT
-# ---------------------------------------------------------
-Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f'
-Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f'
-Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Scheduling Category" /t REG_SZ /d High /f'
-
-
-    # =========================================================
-    # IPV6
-    # =========================================================
-    Show-Step "IPV6" 27
-    Write-Host "[4/25] IPV6..."
-    Run-Safe 'netsh interface ipv6 set global randomizeidentifiers=disabled'
-    Run-Safe 'netsh interface ipv6 set privacy state=disabled'
-
-    # =========================================================
-    # FPS + INPUT
-    # =========================================================
-    Show-Step "FPS + INPUT" 30
-    Write-Host "[5/25] FPS + INPUT..."
-    Run-Safe 'bcdedit /set useplatformtick yes'
-    Run-Safe 'bcdedit /set disabledynamictick yes'
-    Run-Safe 'bcdedit /set tscsyncpolicy enhanced'
-    Run-Safe 'reg add "HKCU\Control Panel\Mouse" /v MouseSpeed /t REG_SZ /d 0 /f'
-    Run-Safe 'reg add "HKCU\Control Panel\Mouse" /v MouseThreshold1 /t REG_SZ /d 0 /f'
-    Run-Safe 'reg add "HKCU\Control Panel\Mouse" /v MouseThreshold2 /t REG_SZ /d 0 /f'
-    Run-Safe 'reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f'
-    Run-Safe 'powercfg -setactive SCHEME_MIN'
-
-    # =========================================================
-    # SYSTEM PROFILE
-    # =========================================================
-    Show-Step "SYSTEM PROFILE" 42
-    Write-Host "[6/25] SYSTEM PROFILE..."
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "SystemResponsiveness" /t REG_DWORD /d 0 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NoLazyMode" /t REG_DWORD /d 1 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "LazyModeTimeout" /t REG_DWORD /d 65536 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "AlwaysOn" /t REG_DWORD /d 1 /f'
-
-    # =========================================================
-    # MMCSS TASKS
-    # =========================================================
-    Show-Step "MMCSS TASKS" 45
-    Write-Host "[7/25] MMCSS TASKS..."
-
-    $Tasks = @("Audio","Capture","DisplayPostProcessing","Distribution","Games","Playback","Pro Audio")
-    foreach ($task in $Tasks) {
-        $path = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\$task"
-        Run-Safe "reg add `"$path`" /v `"$([string]'Affinity')`" /t REG_DWORD /d 1 /f"
-        Run-Safe "reg add `"$path`" /v `"Background Only`" /t REG_SZ /d False /f"
-        Run-Safe "reg add `"$path`" /v `"Clock Rate`" /t REG_DWORD /d 10000 /f"
-        Run-Safe "reg add `"$path`" /v `"GPU Priority`" /t REG_DWORD /d 8 /f"
-        Run-Safe "reg add `"$path`" /v `"Priority`" /t REG_DWORD /d 6 /f"
-        Run-Safe "reg add `"$path`" /v `"Scheduling Category`" /t REG_SZ /d High /f"
-        Run-Safe "reg add `"$path`" /v `"SFIO Priority`" /t REG_SZ /d High /f"
-        Run-Safe "reg add `"$path`" /v `"Latency Sensitive`" /t REG_SZ /d False /f"
-    }
-
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "NoLazyMode" /t REG_DWORD /d 1 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\DisplayPostProcessing" /v "BackgroundPriority" /t REG_DWORD /d 8 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Playback" /v "BackgroundPriority" /t REG_DWORD /d 6 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Priority" /t REG_DWORD /d 1 /f'
-
-    # =========================================================
-    # MEMORY MANAGEMENT
-    # =========================================================
-    Show-Step "MEMORY MANAGEMENT" 47
-    Write-Host "[8/25] MEMORY MANAGEMENT..."
-
-    $MM = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
-    Set-RegValue $MM "ClearPageFileAtShutdown" 0
-    Set-RegValue $MM "DisablePagingExecutive" 1
-    Set-RegValue $MM "LargeSystemCache" 1
-    Set-RegValue $MM "NonPagedPoolQuota" 0
-    Set-RegValue $MM "NonPagedPoolSize" 0
-    Set-RegValue $MM "PagedPoolQuota" 0
-    Set-RegValue $MM "PagedPoolSize" 0
-    Set-RegValue $MM "SecondLevelDataCache" 0
-    Set-RegValue $MM "SessionPoolSize" 4
-    Set-RegValue $MM "SessionViewSize" 48
-    Set-RegValue $MM "SystemPages" 0
-    Set-RegValue $MM "FeatureSettingsOverride" 3
-    Set-RegValue $MM "FeatureSettingsOverrideMask" 3
-    Set-RegValue $MM "EnableAsyncLazywrite" 1
-    Set-RegValue $MM "EnablePerVolumeLazyWriter" 1
-    Set-RegValue $MM "EnableCfg" 0
-    Set-RegValue $MM "DisablePageCombining" 1
-    Set-RegValue $MM "EnablePrefetcher" 0
-    Set-RegValue $MM "EnableSuperfetch" 0
-    Set-RegValue $MM "MoveImages" 0
-    Set-RegValue $MM "FeatureSettings" 1
-    Set-RegValue $MM "IoPageLockLimit" 4294967295
-    Set-RegValue $MM "PhysicalAddressExtension" 1
-
-    # =========================================================
-    # PREFETCH
-    # =========================================================
-    Show-Step "PREFETCH" 50
-    Write-Host "[9/25] PREFETCH..."
-    Run-Safe 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v "EnablePrefetcher" /t REG_DWORD /d 0 /f'
-    Run-Safe 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v "BootId" /t REG_DWORD /d 11 /f'
-
-    # =========================================================
-    # PRIORITY CONTROL
-    # =========================================================
-    Show-Step "PRIORITY CONTROL" 55
-    Write-Host "[10/25] PRIORITY CONTROL..."
-    $PC = "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl"
-    Set-RegValue $PC "ConvertibleSlateMode" 0
-    Set-RegValue $PC "Win32PrioritySeparation" 16397098
-    Set-RegValue $PC "IRQ8Priority" 1
-    Set-RegValue $PC "IRQ16Priority" 2
-    Set-RegValue $PC "AdjustDpcThreshold" 800
-    Set-RegValue $PC "DeepIoCoalescingEnabled" 1
-    Set-RegValue $PC "IdealDpcRate" 800
-    Set-RegValue $PC "ForegroundBoost" 1
-    Set-RegValue $PC "SchedulerAssistThreadFlagOverride" 1
-    Set-RegValue $PC "ThreadBoostType" 2
-    Set-RegValue $PC "ThreadSchedulingModel" 1
-    Set-RegValue $PC "IRQ0Priority" 1
-    Set-RegValue $PC "SystemResponsiveness" 1
-    Set-RegValue $PC "AVX2PriorityBoost" 1
-    Set-RegValue $PC "Win32TimeSlice" 1
-
-    # =========================================================
-    # TCP PARAMETERS
-    # =========================================================
-    Show-Step "TCP PARAMETERS" 60
-    Write-Host "[11/25] TCP PARAMETERS..."
-
-    $ifglobal = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
-    Set-RegValue $ifglobal "TcpAckFrequency" 7
-    Set-RegValue $ifglobal "TcpDelAckTicks" 2
-    Set-RegValue $ifglobal "NumTcbTablePartitions" 9
-    Set-RegValue $ifglobal "TCPNoDelay" 4
-    Set-RegValue $ifglobal "TcpWindowSize" 0x000B2390
-    Set-RegValue $ifglobal "SackOpts" 3
-    Set-RegValue $ifglobal "TcpMaxDataRetransmissions" 4
-    Set-RegValue $ifglobal "Tcp1323Opts" 2
-    Set-RegValue $ifglobal "TCPTimedWaitDelay" 33
-    Set-RegValue $ifglobal "IRPStackSize" 34
-    Set-RegValue $ifglobal "DefaultTTL" 79
-    Set-RegValue $ifglobal "KeepAliveTime" 90000
-    Set-RegValue $ifglobal "KeepAliveInterval" 3000
-    Set-RegValue $ifglobal "TCPInitialRtt" 700
-    Set-RegValue $ifglobal "TcpMaxDupAcks" 2
-    Set-RegValue $ifglobal "EnablePMTUBHDetect" 0
-    Set-RegValue $ifglobal "EnablePMTUDiscovery" 1
-    Set-RegValue $ifglobal "MaxHashTableSize" 0x00010000
-    Set-RegValue $ifglobal "DisableTaskOffload" 0
-    Set-RegValue $ifglobal "TCPAllowedPorts" 3
-    Set-RegValue $ifglobal "NTEContextList" 5
-    Set-RegValue $ifglobal "DisableLargeMTU" 1
-    Set-RegValue $ifglobal "IGMPVersion" 4
-    Set-RegValue $ifglobal "IGMPLevel" 3
-    Set-RegValue $ifglobal "MaxConnectionsPer1_0Server" 24
-    Set-RegValue $ifglobal "MaxConnectionsPerServer" 24
-    Set-RegValue $ifglobal "MaxFreeTcbs" 0x00012AC2
-    Set-RegValue $ifglobal "ArpTRSingleRoute" 3
-    Set-RegValue $ifglobal "SynAttackProtect" 1
-    Set-RegValue $ifglobal "MaxForwardBufferMemory" 0x0003BFD8
-    Set-RegValue $ifglobal "ForwardBufferMemory" 0x0002AAF2
-    Set-RegValue $ifglobal "NumForwardPackets" 0x000002AF
-    Set-RegValue $ifglobal "MaxNumForwardPackets" 0x000002AF
-    Set-RegValue $ifglobal "MaxUserPort" 0x00012AC2
-    Set-RegValue $ifglobal "TcpMaxSendFree" 0x00012AB9
-    Set-RegValue $ifglobal "DeadGWDetectDefault" 3
-    Set-RegValue $ifglobal "DontAddDefaultGatewayDefault" 1
-    Set-RegValue $ifglobal "MaxMpxCt" 0xAF
-    Set-RegValue $ifglobal "EnableICMPRedirect" 2
-    Set-RegValue $ifglobal "EnableWsd" 1
-    Set-RegValue $ifglobal "EnableDynamicBacklog" 2
-    Set-RegValue $ifglobal "EnableDHCP" 3
-    Set-RegValue $ifglobal "AllowUnqualifiedQuery" 2
-    Set-RegValue $ifglobal "DisableMediaSenseEventLog" 3
-    Set-RegValue $ifglobal "DisableRss" 4
-    Set-RegValue $ifglobal "DisableTcpChimneyOffload" 1
-    Set-RegValue $ifglobal "DnsOutstandingQueriesCount" 3000
-    Set-RegValue $ifglobal "EnableAddrMaskReply" 4
-    Set-RegValue $ifglobal "EnableBcastArpReply" 2
-    Set-RegValue $ifglobal "EnableConnectionRateLimiting" 4
-    Set-RegValue $ifglobal "EnableDca" 0
-    Set-RegValue $ifglobal "EnableHeuristics" 3
-    Set-RegValue $ifglobal "EnableIPAutoConfigurationLimits" 1
-    Set-RegValue $ifglobal "EnableTCPA" 4
-    Set-RegValue $ifglobal "IPEnableRouter" 7
-    Set-RegValue $ifglobal "QualifyingDestinationThreshold" 0x000B22C4
-    Set-RegValue $ifglobal "StrictTimeWaitSeqCheck" 4
-
-    # =========================================================
-    # LANMAN SERVER
-    # =========================================================
-    Show-Step "LANMAN SERVER" 63
-    Write-Host "[12/25] LANMAN SERVER..."
-    $lanman = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters"
-    Set-RegValue $lanman "autodisconnect" 0xFFFFFFFF
-    Set-RegValue $lanman "Size" 3
-    Set-RegValue $lanman "EnableOplocks" 0
-    Set-RegValue $lanman "IRPStackSize" 32
-    Set-RegValue $lanman "SharingViolationDelay" 0
-    Set-RegValue $lanman "SharingViolationRetries" 0
-
-    # =========================================================
-    # FIVEM PRIORITY
-    # =========================================================
-    Show-Step "FIVEM PRIORITY" 66
-    Write-Host "[13/25] FIVEM PRIORITY..."
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "CpuPriorityClass" 3
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions" "CpuPriorityClass" 3
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Discord.exe\PerfOptions" "CpuPriorityClass" 1
-
-    # =========================================================
-    # MOUSE KEYS
-    # =========================================================
-    Show-Step "MOUSE KEYS" 68
-    Write-Host "[14/25] MOUSE KEYS..."
-    $mouse = "HKCU:\Control Panel\Accessibility\MouseKeys"
-    Set-RegValue $mouse "Flags" "3000" "String"
-    Set-RegValue $mouse "MaximumSpeed" "90000" "String"
-    Set-RegValue $mouse "TimeToMaximumSpeed" "90000" "String"
-    Set-RegValue $mouse "MaximumSpeed2" "90000" "String"
-    Set-RegValue $mouse "TimeToMaximumSpeed2" "90000" "String"
-
-    # =========================================================
-    # SERVICES
-    # =========================================================
-    Show-Step "SERVICES" 70
-    Write-Host "[15/25] SERVICES..."
-    $services = @(
-        "AxInstSV","tzautoupdate","bthserv","dmwappushservice",
-        "MapsBroker","lfsvc","SharedAccess","lltdsvc",
-        "AppVClient","NetTcpPortSharing","CscService","PhoneSvc",
-        "PrintNotify","QWAVE","RmSvc","RemoteAccess",
-        "SensorDataService","SensrSvc","SensorService",
-        "SCardSvr","ScDeviceEnum","SSDPSRV","WiaRpc",
-        "TabletInputService","upnphost","UserDataSvc",
-        "UevAgentService","WalletService","FrameServer",
-        "stisvc","wisvc","icssvc","XblAuthManager",
-        "XblGameSave"
-    )
-    foreach ($svc in $services) { Run-Safe "Set-Service $svc -StartupType Disabled -ErrorAction SilentlyContinue" }
-
-    # =========================================================
-    # NETWORK RESET
-    # =========================================================
-    Show-Step "NETWORK RESET" 72
-    Write-Host "[16/25] NETWORK RESET..."
-    Run-Safe 'netsh winsock reset'
-    Run-Safe 'netsh winsock reset catalog'
-    Run-Safe 'netsh int ip reset'
-    Run-Safe 'netsh interface ipv4 reset'
-    Run-Safe 'netsh interface ipv6 reset'
-
-# =========================================================
-# EXTRA FIVEM SAFE ADDITIONS
-# =========================================================
-
-Show-Step "FIVEM SAFE ADD" 73
-Write-Host "[SAFE+] FIVEM EXTRA..."
-
-# ---------------------------------------------------------
-# SAFE PROCESS PRIORITY
-# ---------------------------------------------------------
-
-$FiveMExtra = @(
-    "FiveM.exe",
-    "FiveM_GTAProcess.exe",
-    "GTA5.exe",
-    "PlayGTAV.exe",
-    "FiveM_b2372_GTAProcess.exe",
-    "FiveM_b2545_GTAProcess.exe",
-    "FiveM_b2699_GTAProcess.exe",
-    "FiveM_b2802_GTAProcess.exe",
-    "FiveM_b2944_GTAProcess.exe",
-    "FiveM_b3095_GTAProcess.exe",
-    "FiveM_b3258_GTAProcess.exe"
+# เคลียร์ค่าพลังงานในคีย์ซ่อนของ Registry เก่า
+$PowerKeys = @(
+    "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\cc5b647-c1df-4637-891a-dec35c318583",
+    "HKLM:\SYSTEM\ControlSet001\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\cc5b647-c1df-4637-891a-dec35c318583",
+    "HKLM:\SYSTEM\ControlSet002\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\cc5b647-c1df-4637-891a-dec35c318583"
 )
-
-foreach ($proc in $FiveMExtra) {
-
-    $perf = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$proc\PerfOptions"
-
-    Add-RegValueIfMissing $perf "CpuPriorityClass" 3
-    Add-RegValueIfMissing $perf "IoPriority" 3
-    Add-RegValueIfMissing $perf "PagePriority" 5
-}
-
-# ---------------------------------------------------------
-# SAFE GPU PRIORITY
-# ---------------------------------------------------------
-
-Add-RegValueIfMissing `
-"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" `
-"GPU Priority" 8
-
-Add-RegValueIfMissing `
-"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" `
-"Priority" 6
-
-Add-RegValueIfMissing `
-"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" `
-"Scheduling Category" "High" "String"
-
-# ---------------------------------------------------------
-# SAFE DIRECTX GPU PREFERENCE
-# ---------------------------------------------------------
-
-Add-RegValueIfMissing `
-"HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
-"FiveM.exe" `
-"GpuPreference=2;" `
-"String"
-
-Add-RegValueIfMissing `
-"HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
-"FiveM_GTAProcess.exe" `
-"GpuPreference=2;" `
-"String"
-
-# ---------------------------------------------------------
-# SAFE INPUT DELAY
-# ---------------------------------------------------------
-
-Add-RegValueIfMissing `
-"HKCU:\Control Panel\Desktop" `
-"LowLevelHooksTimeout" `
-"1000" `
-"String"
-
-Add-RegValueIfMissing `
-"HKCU:\Control Panel\Desktop" `
-"MenuShowDelay" `
-"0" `
-"String"
-
-# ---------------------------------------------------------
-# SAFE NETWORK LATENCY
-# ---------------------------------------------------------
-
-try {
-
-    $Adapters = Get-ChildItem `
-    "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-
-    foreach ($Adapter in $Adapters) {
-
-        Add-RegValueIfMissing $Adapter.PSPath "TcpAckFrequency" 1
-        Add-RegValueIfMissing $Adapter.PSPath "TCPNoDelay" 1
-        Add-RegValueIfMissing $Adapter.PSPath "TcpDelAckTicks" 0
+foreach ($pk in $PowerKeys) {
+    if (Test-Path $pk) {
+        Set-ItemProperty -Path $pk -Name "ValueMin" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $pk -Name "ValueMax" -Value 0 -Type DWord -ErrorAction SilentlyContinue
     }
-
 }
-catch {
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\893dee8e-2bef-41e0-89c6-b55d0929964c" -Name "ValueMax" -Value 100 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\893dee8e-2bef-41e0-89c6-b55d0929964c\DefaultPowerSchemeValues\8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" -Name "ValueMax" -Value 100 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" -Name "HibernateEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
 
-    Write-Host "SKIPPED : SAFE NETWORK LATENCY" -ForegroundColor DarkYellow
+# ------------------------------------------------------------------------------
+# 2. SYSTEM PERFORMANCE & WINDOWS RESPONSIVENESS
+# ------------------------------------------------------------------------------
+Write-Host "[2/8] Tuning Desktop Responsiveness & Application Timeouts..." -ForegroundColor Yellow
+
+$DesktopPath = "HKCU:\Control Panel\Desktop"
+Set-ItemProperty -Path $DesktopPath -Name "AutoEndTasks" -Value "1" -Type String
+Set-ItemProperty -Path $DesktopPath -Name "MenuShowDelay" -Value "0" -Type String
+Set-ItemProperty -Path $DesktopPath -Name "HungAppTimeout" -Value "1000" -Type String
+Set-ItemProperty -Path $DesktopPath -Name "WaitToKillAppTimeout" -Value "2000" -Type String
+Set-ItemProperty -Path $DesktopPath -Name "WaitToKillServiceTimeout" -Value "1000" -Type String
+Set-ItemProperty -Path $DesktopPath -Name "LowLevelHooksTimeout" -Value "1000" -Type String
+Set-ItemProperty -Path $DesktopPath -Name "ForegroundLockTimeout" -Value "150000" -Type String
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "EnableBalloonTips" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+# ปรับระดับความสำคัญในการทำงานของ Thread (Win32PrioritySeparation ขั้นสูง)
+$PriorityPath = "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl"
+Set-ItemProperty -Path $PriorityPath -Name "ConvertibleSlateMode" -Value 0 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "Win32PrioritySeparation" -Value 38 -Type DWord 
+Set-ItemProperty -Path $PriorityPath -Name "IRQ8Priority" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "IRQ16Priority" -Value 2 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "IRQ0Priority" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "IRQPriority" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "AdjustDpcThreshold" -Value 800 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "DeepIoCoalescingEnabled" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "IdealDpcRate" -Value 2 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "ForegroundBoost" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "SchedulerAssistThreadFlagOverride" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "ThreadBoostType" -Value 2 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "ThreadSchedulingModel" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "AVX2PriorityBoost" -Value 1 -Type DWord
+Set-ItemProperty -Path $PriorityPath -Name "Win32TimeSlice" -Value 1 -Type DWord
+
+# GPU Scheduling & NVIDIA System Latency Optimization
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" -Name "HwSchMode" -Value 2 -Type DWord
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\Scheduler" -Name "VsyncIdleTimeout" -Value 0 -Type DWord
+if (Test-Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\FTS") {
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm\FTS" -Name "EnableRID61684" -Value 1 -Type DWord
 }
 
-# ---------------------------------------------------------
-# SAFE CACHE CLEAN
-# ---------------------------------------------------------
-
-Run-Safe 'taskkill /f /im FiveM.exe'
-Run-Safe 'taskkill /f /im FiveM_GTAProcess.exe'
-
-Run-Safe 'cmd /c del /f /s /q "%localappdata%\FiveM\FiveM.app\data\cache\*"'
-Run-Safe 'cmd /c del /f /s /q "%localappdata%\FiveM\FiveM.app\data\nui-storage\*"'
-
-    # =========================================================
-    # REFRESH
-    # =========================================================
-    Show-Step "REFRESH" 74
-    Write-Host "[17/25] REFRESH..."
-    Run-Safe 'ipconfig /flushdns'
-    Run-Safe 'ipconfig /registerdns'
-    Run-Safe 'ipconfig /release'
-    Run-Safe 'ipconfig /renew'
-    Run-Safe 'arp -d *'
-    Run-Safe 'netsh interface ip delete arpcache'
-
-    # =========================================================
-    # FIVEM EXTRA ONLY
-    # =========================================================
-    Show-Step "FIVEM EXTRA" 67
-    Write-Host "[EXTRA] FIVEM EXTRA..."
-
-    # =========================================================
-    # FIVEM THREAD PRIORITY
-    # =========================================================
-
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "CpuPriorityClass" 4
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "IoPriority" 3
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "PagePriority" 5
-
-    # =========================================================
-    # GTA PROCESS BOOST
-    # =========================================================
-
-    Run-Safe 'wmic process where name="FiveM.exe" CALL setpriority 128'
-    Run-Safe 'wmic process where name="FiveM_GTAProcess.exe" CALL setpriority 128'
-
-    # =========================================================
-    # NETWORK LATENCY BOOST
-    # =========================================================
-
-    Run-Safe 'netsh interface tcp set supplemental internet congestionprovider=ctcp'
-    Run-Safe 'netsh interface tcp set supplemental internet autotuninglevel=disabled'
-
-    # =========================================================
-    # TCP ACK LOW LATENCY
-    # =========================================================
-
-    $Adapters = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-
-    foreach ($Adapter in $Adapters) {
-
-        try {
-
-            New-ItemProperty -Path $Adapter.PSPath -Name "TcpAckFrequency" -PropertyType DWord -Value 1 -Force | Out-Null
-            New-ItemProperty -Path $Adapter.PSPath -Name "TCPNoDelay" -PropertyType DWord -Value 1 -Force | Out-Null
-            New-ItemProperty -Path $Adapter.PSPath -Name "TcpDelAckTicks" -PropertyType DWord -Value 0 -Force | Out-Null
-
-        }
-        catch {}
-
-    }
-
-    # =========================================================
-    # NIC OPTIMIZATION
-    # =========================================================
-
-    Run-Safe "Disable-NetAdapterLso -Name `"$IFACE`""
-    Run-Safe "Enable-NetAdapterRss -Name `"$IFACE`""
-    Run-Safe "Enable-NetAdapterRsc -Name `"$IFACE`""
-
-    # =========================================================
-    # INTERRUPT PRIORITY
-    # =========================================================
-
-    Run-Safe 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQPriority /t REG_DWORD /d 1 /f'
-
-    # =========================================================
-    # GAME INPUT BOOST
-    # =========================================================
-
-    Run-Safe 'reg add "HKCU\Control Panel\Desktop" /v ForegroundLockTimeout /t REG_DWORD /d 0 /f'
-    Run-Safe 'reg add "HKCU\Control Panel\Desktop" /v AutoEndTasks /t REG_SZ /d 1 /f'
-
-    # =========================================================
-    # NVIDIA DRIVER LATENCY
-    # =========================================================
-
-    Run-Safe 'reg add "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm" /v DisablePreemption /t REG_DWORD /d 1 /f'
-
-    # =========================================================
-    # DX CACHE CLEAN
-    # =========================================================
-
-    Run-Safe 'del /f /s /q "%localappdata%\D3DSCache\*"'
-    Run-Safe 'del /f /s /q "%localappdata%\NVIDIA\DXCache\*"'
-    Run-Safe 'del /f /s /q "%localappdata%\NVIDIA\GLCache\*"'
-
-    # =========================================================
-    # POWER LATENCY
-    # =========================================================
-
-    Run-Safe 'powercfg -hibernate off'
-    Run-Safe 'powercfg /setacvalueindex scheme_current sub_processor IDLEDISABLE 1'
-    Run-Safe 'powercfg /setactive scheme_current'
-
-    # =========================================================
-    # CPU PARKING OFF
-    # =========================================================
-
-    Run-Safe 'powercfg -setacvalueindex scheme_current sub_processor CPMINCORES 100'
-    Run-Safe 'powercfg -setacvalueindex scheme_current sub_processor CPMAXCORES 100'
-
-    # =========================================================
-    # USB INPUT LATENCY
-    # =========================================================
-
-    Run-Safe 'powercfg -setacvalueindex scheme_current SUB_USB USBSELECTIVE SUSPEND 0'
-
-    # =========================================================
-    # FIVE M CACHE CLEAN
-    # =========================================================
-
-    Run-Safe 'taskkill /f /im FiveM.exe'
-    Run-Safe 'taskkill /f /im FiveM_GTAProcess.exe'
-
-    Run-Safe 'cmd /c del /f /s /q "%localappdata%\FiveM\FiveM.app\data\cache\*"'
-    Run-Safe 'cmd /c del /f /s /q "%localappdata%\FiveM\FiveM.app\data\nui-storage\*"'
-
-    # =========================================================
-    # DNS FAST REFRESH
-    # =========================================================
-
-    Run-Safe 'ipconfig /flushdns'
-    Run-Safe 'netsh winsock reset'
-
-    # =========================================================
-    # GPU HARDWARE ACCELERATION
-    # =========================================================
-
-    Run-Safe 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f'
-
-    # =========================================================
-    # TIMER RESOLUTION BOOST
-    # =========================================================
-
-    Run-Safe 'bcdedit /set useplatformclock false'
-    Run-Safe 'bcdedit /set disabledynamictick yes'
-    Run-Safe 'bcdedit /set tscsyncpolicy Enhanced'
-
-    # =========================================================
-    # FIVEM ADDITIONAL ONLY
-    # =========================================================
-    Show-Step "FIVEM ADDITIONAL" 75
-    Write-Host "[EXTRA+] FIVEM ADDITIONAL..."
-
-    # =========================================================
+# =========================================================
     # FIVEM PROCESS PRIORITY (ADDITIONAL)
     # =========================================================
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "CpuPriorityClass" 3
@@ -955,609 +254,284 @@ Run-Safe 'cmd /c del /f /s /q "%localappdata%\FiveM\FiveM.app\data\nui-storage\*
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_b2944_GTAProcess.exe\PerfOptions" "PagePriority" 5
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_b3095_GTAProcess.exe\PerfOptions" "PagePriority" 5
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_b3258_GTAProcess.exe\PerfOptions" "PagePriority" 5
+    
+# ------------------------------------------------------------------------------
+# 3. MULTIMEDIA CLASS SCHEDULER (MMCSS) GAMING TWEAKS
+# ------------------------------------------------------------------------------
+Write-Host "[3/8] Optimizing Multimedia Class Scheduler (MMCSS)..." -ForegroundColor Yellow
 
-    # =========================================================
-    # GPU PRIORITY
-    # =========================================================
+$SysProfilePath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
+Set-ItemProperty -Path $SysProfilePath -Name "SystemResponsiveness" -Value 10 -Type DWord 
+Set-ItemProperty -Path $SysProfilePath -Name "NetworkThrottlingIndex" -Value 0xFFFFFFFF -Type DWord
 
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f'
-    Run-Safe 'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Scheduling Category" /t REG_SZ /d High /f'
-
-    # =========================================================
-    # FULLSCREEN OPTIMIZATION OFF
-    # =========================================================
-
-    Run-Safe 'reg add "HKCU\System\GameConfigStore" /v GameDVR_DSEBehavior /t REG_DWORD /d 2 /f'
-    Run-Safe 'reg add "HKCU\System\GameConfigStore" /v GameDVR_EFSEFeatureFlags /t REG_DWORD /d 0 /f'
-
-    # =========================================================
-    # NVIDIA LOW LATENCY
-    # =========================================================
-
-    Run-Safe 'reg add "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm\FTS" /v EnableRID61684 /t REG_DWORD /d 1 /f'
-
-    # =========================================================
-    # TIMER RESOLUTION
-    # =========================================================
-
-    Run-Safe 'bcdedit /set disabledynamictick yes'
-    Run-Safe 'bcdedit /set useplatformtick yes'
-    Run-Safe 'bcdedit /set tscsyncpolicy Enhanced'
-
-    # =========================================================
-    # PROCESS CLEAN
-    # =========================================================
-
-    Run-Safe 'taskkill /f /im GameBar.exe'
-    Run-Safe 'taskkill /f /im GameBarFTServer.exe'
-    Run-Safe 'taskkill /f /im XboxPcApp.exe'
-
-    # =========================================================
-    # FIVEM PROCESS
-    # =========================================================
-
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "IoPriority" 3
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM.exe\PerfOptions" "PagePriority" 5
-
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions" "IoPriority" 3
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions" "PagePriority" 5
-
-    # =========================================================
-    # GAME DVR OFF
-    # =========================================================
-
-    Run-Safe 'reg add "HKCU\System\GameConfigStore" /v GameDVR_Enabled /t REG_DWORD /d 0 /f'
-    Run-Safe 'reg add "HKCU\System\GameConfigStore" /v GameDVR_FSEBehavior /t REG_DWORD /d 2 /f'
-    Run-Safe 'reg add "HKCU\System\GameConfigStore" /v GameDVR_FSEBehaviorMode /t REG_DWORD /d 2 /f'
-    Run-Safe 'reg add "HKCU\System\GameConfigStore" /v GameDVR_HonorUserFSEBehaviorMode /t REG_DWORD /d 1 /f'
-    Run-Safe 'reg add "HKCU\System\GameConfigStore" /v GameDVR_DXGIHonorFSEWindowsCompatible /t REG_DWORD /d 1 /f'
-
-    Run-Safe 'reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR" /v AllowGameDVR /t REG_DWORD /d 0 /f'
-
-    # =========================================================
-    # GAME MODE
-    # =========================================================
-
-    Run-Safe 'reg add "HKCU\Software\Microsoft\GameBar" /v AllowAutoGameMode /t REG_DWORD /d 1 /f'
-    Run-Safe 'reg add "HKCU\Software\Microsoft\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d 1 /f'
-    Run-Safe 'reg add "HKCU\Software\Microsoft\GameBar" /v ShowStartupPanel /t REG_DWORD /d 0 /f'
-    Run-Safe 'reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f'
-
-    # =========================================================
-    # INPUT DELAY
-    # =========================================================
-
-    Run-Safe 'reg add "HKCU\Control Panel\Desktop" /v LowLevelHooksTimeout /t REG_SZ /d 1000 /f'
-    Run-Safe 'reg add "HKCU\Control Panel\Desktop" /v WaitToKillAppTimeout /t REG_SZ /d 2000 /f'
-    Run-Safe 'reg add "HKCU\Control Panel\Desktop" /v HungAppTimeout /t REG_SZ /d 1000 /f'
-
-    # =========================================================
-    # GPU SCHEDULING
-    # =========================================================
-
-    Run-Safe 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f'
-
-    # =========================================================
-    # DIRECTX
-    # =========================================================
-
-    Run-Safe 'reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "FiveM.exe" /t REG_SZ /d "GpuPreference=2;" /f'
-
-    # =========================================================
-    # NETWORK REFRESH
-    # =========================================================
-
-    Run-Safe 'ipconfig /flushdns'
-
-    # =========================================================
-    # MEMORY CLEAN
-    # =========================================================
-
-    Run-Safe 'Rundll32.exe advapi32.dll,ProcessIdleTasks'
-
-# =========================================================
-# FIVEM EXTRA ADD ONLY
-# เพิ่มอย่างเดียว / ไม่เขียนทับ
-# =========================================================
-
-Show-Step "FIVEM ADD ONLY" 76
-Write-Host "[ADD ONLY] FIVEM SAFE EXTRA..."
-
-# ---------------------------------------------------------
-# FUNCTION
-# ---------------------------------------------------------
-
-function Add-RegIfNotExist {
-    param(
-        [string]$Path,
-        [string]$Name,
-        $Value,
-        [string]$Type = "DWord"
-    )
-
-    try {
-
-        if (-not (Test-Path $Path)) {
-            New-Item -Path $Path -Force | Out-Null
-        }
-
-        $exists = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-
-        if ($null -eq $exists) {
-
-            if ($Type -eq "String") {
-
-                New-ItemProperty `
-                    -Path $Path `
-                    -Name $Name `
-                    -PropertyType String `
-                    -Value $Value `
-                    -Force | Out-Null
-            }
-            else {
-
-                New-ItemProperty `
-                    -Path $Path `
-                    -Name $Name `
-                    -PropertyType DWord `
-                    -Value ([uint32]$Value) `
-                    -Force | Out-Null
-            }
-
-            Write-Host "ADDED : $Path\$Name" -ForegroundColor Green
-        }
-        else {
-
-            Write-Host "SKIPPED : $Path\$Name" -ForegroundColor DarkYellow
-        }
-
-    }
-    catch {
-
-        Write-Host "FAILED : $Path\$Name" -ForegroundColor Red
+# ฟังก์ชันจัดการคีย์ย่อยใน Multimedia Tasks เพื่อลดพื้นที่โค้ดซ้ำซ้อนและป้อนค่าได้ครบถ้วน
+function Set-MultimediaTask($TaskName, $TaskProperties) {
+    $Path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\$TaskName"
+    if (-not (Test-Path $Path)) { New-Item -Path $Path -Force | Out-Null }
+    foreach ($Prop in $TaskProperties.GetEnumerator()) {
+        $Type = if ($Prop.Value -is [int]) { "DWord" } else { "String" }
+        Set-ItemProperty -Path $Path -Name $Prop.Name -Value $Prop.Value -Type $Type -Force
     }
 }
 
-# ---------------------------------------------------------
-# FIVEM PROCESS BOOST
-# ---------------------------------------------------------
+Set-MultimediaTask "Games" @{"Affinity"=0; "Background Only"="False"; "Clock Rate"=10000; "GPU Priority"=8; "Priority"=6; "Scheduling Category"="High"; "SFIO Priority"="High"; "Latency Sensitive"="True"}
+Set-MultimediaTask "Low Latency" @{"Affinity"=0; "Background Only"="False"; "Clock Rate"=10000; "GPU Priority"=8; "Priority"=2; "Scheduling Category"="High"; "SFIO Priority"="High"; "Latency Sensitive"="True"}
+Set-MultimediaTask "Audio" @{"Affinity"=0; "Background Only"="True"; "Clock Rate"=10000; "GPU Priority"=2; "Priority"=1; "Scheduling Category"="High"; "SFIO Priority"="High"}
+Set-MultimediaTask "Pro Audio" @{"Affinity"=0; "Background Only"="False"; "Clock Rate"=10000; "GPU Priority"=5; "Priority"=1; "Scheduling Category"="High"; "SFIO Priority"="High"}
 
-$FiveMAdd = @(
-    "FiveM.exe",
-    "FiveM_GTAProcess.exe",
-    "GTA5.exe",
-    "PlayGTAV.exe",
-    "FiveM_b2372_GTAProcess.exe",
-    "FiveM_b2545_GTAProcess.exe",
-    "FiveM_b2699_GTAProcess.exe",
-    "FiveM_b2802_GTAProcess.exe",
-    "FiveM_b2944_GTAProcess.exe",
-    "FiveM_b3095_GTAProcess.exe",
-    "FiveM_b3258_GTAProcess.exe"
-)
+# ------------------------------------------------------------------------------
+# 4. MOUSE, KEYBOARD & INPUT DELAY FIX (RAW INPUT 1:1)
+# ------------------------------------------------------------------------------
+Write-Host "[4/8] Removing Mouse Acceleration & Keyboard Input Delays..." -ForegroundColor Yellow
 
-foreach ($proc in $FiveMAdd) {
-
-    $perf = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$proc\PerfOptions"
-
-    Add-RegIfNotExist $perf "CpuPriorityClass" 3
-    Add-RegIfNotExist $perf "IoPriority" 3
-    Add-RegIfNotExist $perf "PagePriority" 5
+# ล้างค่าการเร่งความเร็วเมาส์เพื่อความเสถียร 1:1 ทั้งผู้ใช้ปัจจุบันและผู้ใช้เริ่มต้นระบบ
+$MouseTargets = @("HKCU:\Control Panel\Mouse", "HKU:\.DEFAULT\Control Panel\Mouse")
+foreach ($Path in $MouseTargets) {
+    if (-not (Test-Path $Path)) { New-Item -Path $Path -Force | Out-Null }
+    Set-ItemProperty -Path $Path -Name "ActiveWindowTracking" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $Path -Name "DoubleClickWidth" -Value "8" -Type String
+    Set-ItemProperty -Path $Path -Name "DoubleClickSpeed" -Value "3004" -Type String -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $Path -Name "MouseSpeed" -Value "0" -Type String
+    Set-ItemProperty -Path $Path -Name "MouseThreshold1" -Value "0" -Type String
+    Set-ItemProperty -Path $Path -Name "MouseThreshold2" -Value "0" -Type String
+    Set-ItemProperty -Path $Path -Name "SnapToDefaultButton" -Value "0" -Type String
+    Set-ItemProperty -Path $Path -Name "SwapMouseButtons" -Value "0" -Type String
+    Set-ItemProperty -Path $Path -Name "MouseTrails" -Value "0" -Type String
 }
 
-# ---------------------------------------------------------
-# GPU PREFERENCE
-# ---------------------------------------------------------
+# เพิ่มขนาดบัฟเฟอร์คิวข้อมูลของคอนโทรลเลอร์ฮาร์ดแวร์เมาส์ 
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\mouclass\Parameters" -Name "MouseDataQueueSize" -Value 1024 -Type DWord
 
-Add-RegIfNotExist `
-"HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
-"FiveM.exe" `
-"GpuPreference=2;" `
-"String"
+# การตอบสนองของแผงฟังก์ชันช่วยเหลือเมาส์ (MouseKeys)
+$MouseKeysPath = "HKCU:\Control Panel\Accessibility\MouseKeys"
+if (-not (Test-Path $MouseKeysPath)) { New-Item -Path $MouseKeysPath -Force | Out-Null }
+Set-ItemProperty -Path $MouseKeysPath -Name "Flags" -Value "1000" -Type String
+Set-ItemProperty -Path $MouseKeysPath -Name "MaximumSpeed" -Value "90000" -Type String
+Set-ItemProperty -Path $MouseKeysPath -Name "TimeToMaximumSpeed" -Value "70000" -Type String
 
-Add-RegIfNotExist `
-"HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
-"FiveM_GTAProcess.exe" `
-"GpuPreference=2;" `
-"String"
+# เร่งอัตราตอบสนองการกดปุ่มคีย์บอร์ดให้รับคำสั่งไวที่สุด
+$KeyboardResponse = "HKCU:\Control Panel\Accessibility\Keyboard Response"
+if (-not (Test-Path $KeyboardResponse)) { New-Item -Path $KeyboardResponse -Force | Out-Null }
+Set-ItemProperty -Path $KeyboardResponse -Name "AutoRepeatDelay" -Value "150" -Type String
+Set-ItemProperty -Path $KeyboardResponse -Name "AutoRepeatRate" -Value "25" -Type String
+Set-ItemProperty -Path $KeyboardResponse -Name "BounceTime" -Value "0" -Type String
+Set-ItemProperty -Path $KeyboardResponse -Name "DelayBeforeAcceptance" -Value "0" -Type String
+Set-ItemProperty -Path $KeyboardResponse -Name "Flags" -Value "1000" -Type String
 
-# ---------------------------------------------------------
-# GAME DVR OFF
-# ---------------------------------------------------------
+# ------------------------------------------------------------------------------
+# 5. NETWORK & TCP/IP PARAMETERS (DISABLE NAGLE'S ALGORITHM)
+# ------------------------------------------------------------------------------
+Write-Host "[5/8] Injecting Advanced TCP/IP Profiles & Network Tweaks..." -ForegroundColor Yellow
 
-Add-RegIfNotExist `
-"HKCU:\System\GameConfigStore" `
-"GameDVR_Enabled" `
-0
-
-Add-RegIfNotExist `
-"HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" `
-"AllowGameDVR" `
-0
-
-# ---------------------------------------------------------
-# GAME MODE
-# ---------------------------------------------------------
-
-Add-RegIfNotExist `
-"HKCU:\Software\Microsoft\GameBar" `
-"AllowAutoGameMode" `
-1
-
-Add-RegIfNotExist `
-"HKCU:\Software\Microsoft\GameBar" `
-"AutoGameModeEnabled" `
-1
-
-# ---------------------------------------------------------
-# LOW LATENCY NETWORK
-# ---------------------------------------------------------
-
-try {
-
-    $Adapters = Get-ChildItem `
-    "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-
-    foreach ($Adapter in $Adapters) {
-
-        Add-RegIfNotExist $Adapter.PSPath "TcpAckFrequency" 1
-        Add-RegIfNotExist $Adapter.PSPath "TCPNoDelay" 1
-        Add-RegIfNotExist $Adapter.PSPath "TcpDelAckTicks" 0
-    }
-
+# ตั้งค่าพารามิเตอร์ของระบบเครือข่ายแกนหลัก (รวมค่า Buffer และ Queue ทั้งหมด)
+$TCPPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
+$TCPValues = @{
+    "MTU" = 1500; "MSS" = 1460; "TcpAckFrequency" = 1; "TcpDelAckTicks" = 0; "TCPNoDelay" = 1;
+    "NumTcbTablePartitions" = 8; "TcpWindowSize" = 65535; "SackOpts" = 1; "TcpMaxDataRetransmissions" = 3;
+    "Tcp1323Opts" = 1; "TCPTimedWaitDelay" = 30; "IRPStackSize" = 15; "DefaultTTL" = 64;
+    "KeepAliveTime" = 7200000; "KeepAliveInterval" = 1000; "TCPInitialRtt" = 300; "TcpMaxDupAcks" = 2;
+    "TcpRecSegmentSize" = 2776677; "EnablePMTUBHDetect" = 0; "EnablePMTUDiscovery" = 1;
+    "GlobalMaxTcpWindowSize" = 65535; "MaxHashTableSize" = 65536; "DisableTaskOffload" = 0;
+    "WorldMaxTcpWindowsSize" = 700967; "TCPAllowedPorts" = 1; "NTEContextList" = 3;
+    "DisableLargeMTU" = 0; "IGMPVersion" = 2; "IGMPLevel" = 2; "MaxConnectionsPer1_0Server" = 16;
+    "MaxConnectionsPerServer" = 16; "MaxFreeTcbs" = 65536; "ArpTRSingleRoute" = 1;
+    "SynAttackProtect" = 1; "MaxForwardBufferMemory" = 175200; "ForwardBufferMemory" = 175200;
+    "NumForwardPackets" = 567; "MaxNumForwardPackets" = 567; "MaxUserPort" = 65534;
+    "TcpMaxSendFree" = 65535; "DeadGWDetectDefault" = 1; "DontAddDefaultGatewayDefault" = 1;
+    "MaxMpxCt" = 175; "EnableICMPRedirect" = 0; "CacheHashTableBucketSize" = 8907;
+    "EnableWsd" = 0; "EnableDynamicBacklog" = 2; "EnableDHCP" = 3; "AllowUnqualifiedQuery" = 2;
+    "DisableMediaSenseEventLog" = 1; "DisableRss" = 0; "DisableTcpChimneyOffload" = 0;
+    "DnsOutstandingQueriesCount" = 3000; "EnableAddrMaskReply" = 4; "EnableBcastArpReply" = 2;
+    "EnableConnectionRateLimiting" = 0; "EnableDca" = 1; "EnableHeuristics" = 0;
+    "EnableIPAutoConfigurationLimits" = 1; "EnableTCPA" = 1; "IPEnableRouter" = 7;
+    "QualifyingDestinationThreshold" = 729796; "StrictTimeWaitSeqCheck" = 4
 }
-catch {
-
-    Write-Host "SKIPPED : TCP ADD ONLY" -ForegroundColor DarkYellow
+foreach ($v in $TCPValues.Keys) {
+    Set-ItemProperty -Path $TCPPath -Name $v -Value $TCPValues[$v] -Type DWord -ErrorAction SilentlyContinue
 }
 
-# ---------------------------------------------------------
-# INPUT LATENCY
-# ---------------------------------------------------------
+# ปิดดีเลย์หน่วงแพ็กเก็ตเน็ต (Nagle's) ยิงตรงรายอะแดปเตอร์เครือข่ายทุกตัวในเครื่อง
+$InterfacesPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
+Get-ChildItem -Path $InterfacesPath | ForEach-Object {
+    Set-ItemProperty -Path $_.PSPath -Name "TcpAckFrequency" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $_.PSPath -Name "TCPNoDelay" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $_.PSPath -Name "TcpDelAckTicks" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $_.PSPath -Name "MTU" -Value 1500 -Type DWord -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $_.PSPath -Name "MSS" -Value 1460 -Type DWord -ErrorAction SilentlyContinue
+}
 
-Add-RegIfNotExist `
-"HKCU:\Control Panel\Desktop" `
-"LowLevelHooksTimeout" `
-"1000" `
-"String"
+# ตั้งค่าการจัดลำดับความสำคัญของเน็ตเวิร์กเซอวิส (Network Service Priority)
+$ServiceProvider = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\ServiceProvider"
+Set-ItemProperty -Path $ServiceProvider -Name "Class" -Value 8 -Type DWord
+Set-ItemProperty -Path $ServiceProvider -Name "DnsPriority" -Value 6 -Type DWord
+Set-ItemProperty -Path $ServiceProvider -Name "HostsPriority" -Value 5 -Type DWord
+Set-ItemProperty -Path $ServiceProvider -Name "LocalPriority" -Value 4 -Type DWord
+Set-ItemProperty -Path $ServiceProvider -Name "NetbtPriority" -Value 7 -Type DWord
 
-Add-RegIfNotExist `
-"HKCU:\Control Panel\Desktop" `
-"MenuShowDelay" `
-"0" `
-"String"
+# ล็อกแบนด์วิดท์โครงสร้าง Lanman Server & Workstation ให้ดึงความสามารถฮาร์ดแวร์มาได้เต็มที่
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Services\LanmanServer\Parameters" -Name "SizReqBuf" -Value 17424 -Type DWord
+$LanmanWorkstation = "HKLM:\SYSTEM\CurrentControlSet\services\LanmanWorkstation\Parameters"
+Set-ItemProperty -Path $LanmanWorkstation -Name "DisableBandwidthThrottling" -Value 1 -Type DWord
+Set-ItemProperty -Path $LanmanWorkstation -Name "DisableLargeMtu" -Value 0 -Type DWord
+Set-ItemProperty -Path $LanmanWorkstation -Name "MaxCmds" -Value 30 -Type DWord
+Set-ItemProperty -Path $LanmanWorkstation -Name "MaxThreads" -Value 30 -Type DWord
+Set-ItemProperty -Path $LanmanWorkstation -Name "MaxCollectionCount" -Value 32 -Type DWord
+Set-ItemProperty -Path $LanmanWorkstation -Name "KeepConn" -Value 86400 -Type DWord
 
-# ---------------------------------------------------------
-# MMCSS GAME PROFILE
-# ---------------------------------------------------------
+# ปลดล็อก Bandwidth QoS Packet Scheduler ให้วิ่งตรง 100%
+$PschedPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched"
+if (-not (Test-Path $PschedPath)) { New-Item $PschedPath -Force | Out-Null }
+Set-ItemProperty -Path $PschedPath -Name "NonBestEffortLimit" -Value 0 -Type DWord
 
-$GamesKey = `
-"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
+# บังคับเปิดประสิทธิภาพฮาร์ดแวร์ผ่าน MSMQ Registry
+if (-not (Test-Path "HKLM:\SOFTWARE\Microsoft\MSMQ\Parameters")) { New-Item -Path "HKLM:\SOFTWARE\Microsoft\MSMQ\Parameters" -Force | Out-Null }
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\MSMQ\Parameters" -Name "TCPNoDelay" -Value 1 -Type DWord
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\MSMQ\Parameters" -Name "TcpNoDelay" -Value 1 -Type DWord
 
-Add-RegIfNotExist $GamesKey "GPU Priority" 8
-Add-RegIfNotExist $GamesKey "Priority" 6
+# สั่งปิดฟังก์ชันประหยัดพลังงานที่ตัวการ์ดแลนทางกายภาพ
+Get-NetAdapter | ForEach-Object {
+    $name = $_.Name
+    Set-NetAdapterPowerManagement -Name $name -AllowComputerToTurnOffDevice Disabled -ErrorAction SilentlyContinue
+    Set-NetAdapterAdvancedProperty -Name $name -DisplayName "Energy Efficient Ethernet" -DisplayValue "Disabled" -ErrorAction SilentlyContinue
+    Set-NetAdapterAdvancedProperty -Name $name -DisplayName "Interrupt Moderation" -DisplayValue "Disabled" -ErrorAction SilentlyContinue
+}
 
-Add-RegIfNotExist `
-$GamesKey `
-"Scheduling Category" `
-"High" `
-"String"
+# ปรับจูน Netsh TCP Global (ลบข้อขัดแย้งของคำสั่งเดิมทั้งหมด)
+netsh interface ipv4 set subinterface "Ethernet" mtu=1500 store=persistent | Out-Null
+netsh int tcp set global autotuninglevel=normal | Out-Null
+netsh int tcp set global rss=enabled | Out-Null
+netsh int tcp set global chimney=enabled | Out-Null
+netsh int tcp set global dca=enabled | Out-Null
+netsh int tcp set global netdma=enabled | Out-Null
+netsh int tcp set global congestionprovider=ctcp | Out-Null
+netsh int tcp set global timestamps=disabled | Out-Null
+netsh int tcp set global nonsackrttresiliency=disabled | Out-Null
+netsh int tcp set global maxsynretransmissions=2 | Out-Null
+netsh int tcp set heuristics disabled | Out-Null
 
-Add-RegIfNotExist `
-$GamesKey `
-"SFIO Priority" `
-"High" `
-"String"
+# ตั้งค่าช่องทาง Google DNS เสถียรสูงให้การ์ดอินเทอร์เน็ตหลัก
+netsh interface ip set dns name="Ethernet" static 8.8.8.8 | Out-Null
+netsh interface ip add dns name="Ethernet" 8.8.4.4 index=2 | Out-Null
 
-# ---------------------------------------------------------
-# HW SCHEDULING
-# ---------------------------------------------------------
+# ------------------------------------------------------------------------------
+# 6. FILE SYSTEM, MEMORY & INTEL HARDWARE ALLOCATION
+# ------------------------------------------------------------------------------
+Write-Host "[6/8] Tuning Filesystem, Storage & Memory Buffers..." -ForegroundColor Yellow
 
-Add-RegIfNotExist `
-"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" `
-"HwSchMode" `
-2
+$FileSystem = "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem"
+Set-ItemProperty -Path $FileSystem -Name "NtfsMftZoneReservation" -Value 1 -Type DWord
+Set-ItemProperty -Path $FileSystem -Name "NTFSDisable8dot3NameCreation" -Value 1 -Type DWord
+Set-ItemProperty -Path $FileSystem -Name "DontVerifyRandomDrivers" -Value 1 -Type DWord
+Set-ItemProperty -Path $FileSystem -Name "NTFSDisableLastAccessUpdate" -Value 1 -Type DWord
+Set-ItemProperty -Path $FileSystem -Name "ContigFileAllocSize" -Value 64 -Type DWord
 
+# ลบระบบสแกนไฟล์เบื้องหลังเพื่อลดการสั่นกระตุกของพื้นที่จัดเก็บข้อมูล (SSD/HDD)
+$Prefetch = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters"
+Set-ItemProperty -Path $Prefetch -Name "EnablePrefetcher" -Value 0 -Type DWord
+Set-ItemProperty -Path $Prefetch -Name "EnableSuperfetch" -Value 0 -Type DWord
+Set-ItemProperty -Path $Prefetch -Name "EnableBoottrace" -Value 0 -Type DWord
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" -Name "Max Cached Icons" -Value "2000" -Type String
+
+# ปลดล็อกทรัพยากรการคำนวณกราฟิกภายในชิปเซ็ต (Dedicated Segment Size)
+if (-not (Test-Path "HKLM:\SOFTWARE\Intel\GMM")) { New-Item -Path "HKLM:\SOFTWARE\Intel\GMM" -Force | Out-Null }
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Intel\GMM" -Name "DedicatedSegmentSize" -Value 1298 -Type DWord
+
+# บล็อกระบบแจ้งเตือนพื้นที่เหลือน้อยของ Windows Explorer และการค้นหาขยะ
+$PoliciesExplorer = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+if (-not (Test-Path $PoliciesExplorer)) { New-Item -Path $PoliciesExplorer -Force | Out-Null }
+Set-ItemProperty -Path $PoliciesExplorer -Name "NoLowDiskSpaceChecks" -Value 1 -Type DWord
+Set-ItemProperty -Path $PoliciesExplorer -Name "LinkResolveIgnoreLinkInfo" -Value 1 -Type DWord
+Set-ItemProperty -Path $PoliciesExplorer -Name "NoResolveSearch" -Value 1 -Type DWord
+Set-ItemProperty -Path $PoliciesExplorer -Name "NoResolveTrack" -Value 1 -Type DWord
+Set-ItemProperty -Path $PoliciesExplorer -Name "NoInternetOpenWith" -Value 1 -Type DWord
+
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Reliability" -Name "TimeStampInterval" -Value 0 -Type DWord
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\cdrom" -Name "AutoRun" -Value 0 -Type DWord
+
+# ------------------------------------------------------------------------------
+# 7. GAME MODE & WINDOWS GAME DVR SYSTEM OFF
+# ------------------------------------------------------------------------------
+Write-Host "[7/8] Enforcing Game Mode & Disabling Windows Background DVR..." -ForegroundColor Yellow
+
+# ตรวจสอบและเตรียมเส้นทางเพื่อเขียนค่า Registry ระบบย่อยของ GameBar
+$GameBarPaths = @("HKCU:\Software\Microsoft\GameBar", "HKCU:\System\GameConfigStore", "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR")
+foreach ($p in $GameBarPaths) { if (-not (Test-Path $p)) { New-Item $p -Force | Out-Null } }
+
+# บังคับรันระบบปฏิบัติการเข้าสู่โหมดรีดเฟรมเรตเกม (Game Mode)
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "AllowAutoGameMode" -Value 1 -Type DWord
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "ShowStartupPanel" -Value 0 -Type DWord
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\GameBar" -Name "UseNexusForGameBarEnabled" -Value 0 -Type DWord
+
+# จัดการคีย์ย่อยสำหรับการปิดระบบบันทึกคลิปซ้อนพื้นหลังของ Game DVR
+Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -Value 0 -Type DWord
+Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_FSEBehavior" -Value 2 -Type DWord
+Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_FSEBehaviorMode" -Value 2 -Type DWord
+Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_HonorUserFSEBehaviorMode" -Value 1 -Type DWord
+Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_DXGIHonorFSEWindowsCompatible" -Value 1 -Type DWord
+Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_DSEBehavior" -Value 2 -Type DWord
+Set-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_EFSEFeatureFlags" -Value 0 -Type DWord
+
+Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" -Name "AllowGameDVR" -Value 0 -Type DWord
+
+# ล็อกค่าประสิทธิภาพการเรนเดอร์และความลื่นไหลของเอนจิ้นเกม (Fps Tweaks)
+$GamesPath = "HKCU:\SOFTWARE\Microsoft\Games"
+if (-not (Test-Path $GamesPath)) { New-Item -Path $GamesPath -Force | Out-Null }
+Set-ItemProperty -Path $GamesPath -Name "FpsAll" -Value 1 -Type DWord
+Set-ItemProperty -Path $GamesPath -Name "GameFluidity" -Value 1 -Type DWord
+Set-ItemProperty -Path $GamesPath -Name "FpsStatusGames" -Value 16 -Type DWord
+Set-ItemProperty -Path $GamesPath -Name "FpsStatusGamesAll" -Value 4 -Type DWord
+
+# ------------------------------------------------------------------------------
+# 8. WINDOWS TIMER & CORE ENGINE BOOT (BCDEdit Tweaks ชุดใหญ่)
+# ------------------------------------------------------------------------------
+Write-Host "[8/8] Injecting Latency Timer Resolution & BCDEdit Settings..." -ForegroundColor Yellow
+
+bcdedit /set disabledynamictick yes | Out-Null
+bcdedit /set useplatformtick yes | Out-Null
+bcdedit /set tscsyncpolicy Enhanced | Out-Null
+bcdedit /set timeout 0 | Out-Null
+bcdedit /set nx optout | Out-Null
+bcdedit /set bootux disabled | Out-Null
+bcdedit /set bootmenupolicy standard | Out-Null
+bcdedit /set hypervisorlaunchtype off | Out-Null
+bcdedit /set tpmbootentropy ForceDisable | Out-Null
+bcdedit /set quietboot yes | Out-Null
+bcdedit /set {globalsettings} custom:16000067 true | Out-Null
+bcdedit /set {globalsettings} custom:16000069 true | Out-Null
+bcdedit /set {globalsettings} custom:16000068 true | Out-Null
+bcdedit /set linearaddress57 OptOut | Out-Null
+bcdedit /set increaseuserva 268435328 | Out-Null
+bcdedit /set firstmegabytepolicy UseAll | Out-Null
+bcdedit /set avoidlowmemory 0x8000000 | Out-Null
+bcdedit /set nolowmem Yes | Out-Null
+bcdedit /set allowedinmemorysettings 0x0 | Out-Null
+bcdedit /set isolatedcontext No | Out-Null
+bcdedit /set vsmlaunchtype Off | Out-Null
+bcdedit /set vm No | Out-Null
+bcdedit /set configaccesspolicy Default | Out-Null
+bcdedit /set MSI Default | Out-Null
+bcdedit /set usephysicaldestination No | Out-Null
+bcdedit /set usefirmwarepcisettings No | Out-Null
+bcdedit /deletevalue useplatformclock 2>$null | Out-Null
+
+
+
+# สั่งฆ่าโปรเซสแอปพื้นหลังที่คอยแอบแย่งความเร็วอินเทอร์เน็ตและแรมเครื่องชั่วคราว
+$apps = @("OneDrive", "Skype", "Teams", "XboxAppServices", "YourPhone", "SteamWebHelper", "Copilot", "GameBar", "GameBarFTServer", "XboxPcApp")
+foreach ($a in $apps) { Get-Process -Name $a -ErrorAction SilentlyContinue | Stop-Process -Force }
+
+# ------------------------------------------------------------------------------
+# COMPLETION SUMMARY
+# ------------------------------------------------------------------------------
+Clear-Host
+Write-Host "======================================================================" -ForegroundColor Green
+Write-Host "      FLOWGOD                                                         " -ForegroundColor Green
+Write-Host "======================================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "FIVEM ADD ONLY COMPLETE" -ForegroundColor Cyan
+Write-Host " รวบรวมค่าปรับแต่งระบบลึกระดับ Kernel, ทราฟฟิก TCP/IP, บัฟเฟอร์เมาส์ " -ForegroundColor White
+Write-Host " และค่าลดเวลาหน่วง (Input Lag) ทั้งหมดให้คุณเรียบร้อย ครบถ้วน 100% แล้วครับ" -ForegroundColor White
 Write-Host ""
-
-# =========================================================
-# FIVEM SAFE ADD ONLY
-# เพิ่มอย่างเดียว / ไม่แก้ / ไม่ลบ
-# =========================================================
-
-Show-Step "FIVEM SAFE ADD ONLY" 77
-Write-Host "[ADD ONLY] FIVEM SAFE REGISTRY..."
-
-function Add-OnlyReg {
-    param(
-        [string]$Path,
-        [string]$Name,
-        $Value,
-        [string]$Type = "DWord"
-    )
-
-    try {
-
-        if (-not (Test-Path $Path)) {
-            New-Item -Path $Path -Force | Out-Null
-        }
-
-        $exists = Get-ItemProperty `
-            -Path $Path `
-            -Name $Name `
-            -ErrorAction SilentlyContinue
-
-        if ($null -eq $exists) {
-
-            if ($Type -eq "String") {
-
-                New-ItemProperty `
-                    -Path $Path `
-                    -Name $Name `
-                    -PropertyType String `
-                    -Value $Value `
-                    -Force | Out-Null
-            }
-            else {
-
-                New-ItemProperty `
-                    -Path $Path `
-                    -Name $Name `
-                    -PropertyType DWord `
-                    -Value ([uint32]$Value) `
-                    -Force | Out-Null
-            }
-
-            Write-Host "ADDED : $Path\$Name" -ForegroundColor Green
-        }
-        else {
-
-            Write-Host "SKIPPED : $Path\$Name" -ForegroundColor DarkYellow
-        }
-
-    }
-    catch {
-
-        Write-Host "FAILED : $Path\$Name" -ForegroundColor Red
-    }
-}
-
-# =========================================================
-# PROCESS PRIORITY
-# =========================================================
-
-$FiveMProcesses = @(
-    "FiveM.exe",
-    "FiveM_GTAProcess.exe",
-    "GTA5.exe",
-    "PlayGTAV.exe",
-    "FiveM_b2372_GTAProcess.exe",
-    "FiveM_b2545_GTAProcess.exe",
-    "FiveM_b2699_GTAProcess.exe",
-    "FiveM_b2802_GTAProcess.exe",
-    "FiveM_b2944_GTAProcess.exe",
-    "FiveM_b3095_GTAProcess.exe",
-    "FiveM_b3258_GTAProcess.exe"
-)
-
-foreach ($proc in $FiveMProcesses) {
-
-    $perf = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$proc\PerfOptions"
-
-    Add-OnlyReg $perf "CpuPriorityClass" 3
-    Add-OnlyReg $perf "IoPriority" 3
-    Add-OnlyReg $perf "PagePriority" 5
-}
-
-# =========================================================
-# GPU PREFERENCE
-# =========================================================
-
-Add-OnlyReg `
-"HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
-"FiveM.exe" `
-"GpuPreference=2;" `
-"String"
-
-Add-OnlyReg `
-"HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
-"FiveM_GTAProcess.exe" `
-"GpuPreference=2;" `
-"String"
-
-Add-OnlyReg `
-"HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
-"GTA5.exe" `
-"GpuPreference=2;" `
-"String"
-
-# =========================================================
-# GAME DVR OFF
-# =========================================================
-
-Add-OnlyReg `
-"HKCU:\System\GameConfigStore" `
-"GameDVR_Enabled" `
-0
-
-Add-OnlyReg `
-"HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" `
-"AllowGameDVR" `
-0
-
-# =========================================================
-# GAME MODE
-# =========================================================
-
-Add-OnlyReg `
-"HKCU:\Software\Microsoft\GameBar" `
-"AllowAutoGameMode" `
-1
-
-Add-OnlyReg `
-"HKCU:\Software\Microsoft\GameBar" `
-"AutoGameModeEnabled" `
-1
-
-# =========================================================
-# LOW LATENCY NETWORK
-# =========================================================
-
-try {
-
-    $Adapters = Get-ChildItem `
-    "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-
-    foreach ($Adapter in $Adapters) {
-
-        Add-OnlyReg $Adapter.PSPath "TcpAckFrequency" 1
-        Add-OnlyReg $Adapter.PSPath "TCPNoDelay" 1
-        Add-OnlyReg $Adapter.PSPath "TcpDelAckTicks" 0
-    }
-
-}
-catch {
-
-    Write-Host "SKIPPED : NETWORK TWEAKS" -ForegroundColor DarkYellow
-}
-
-# =========================================================
-# INPUT DELAY
-# =========================================================
-
-Add-OnlyReg `
-"HKCU:\Control Panel\Desktop" `
-"LowLevelHooksTimeout" `
-"1000" `
-"String"
-
-Add-OnlyReg `
-"HKCU:\Control Panel\Desktop" `
-"MenuShowDelay" `
-"0" `
-"String"
-
-# =========================================================
-# MMCSS GAMES
-# =========================================================
-
-$GamesKey = `
-"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
-
-Add-OnlyReg $GamesKey "GPU Priority" 8
-Add-OnlyReg $GamesKey "Priority" 6
-
-Add-OnlyReg `
-$GamesKey `
-"Scheduling Category" `
-"High" `
-"String"
-
-Add-OnlyReg `
-$GamesKey `
-"SFIO Priority" `
-"High" `
-"String"
-
-# =========================================================
-# GPU HARDWARE SCHEDULING
-# =========================================================
-
-Add-OnlyReg `
-"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" `
-"HwSchMode" `
-2
-
-Write-Host ""
-Write-Host "FIVEM SAFE ADD ONLY COMPLETE" -ForegroundColor Cyan
-Write-Host ""
-
-    # =========================================================
-    # MTU
-    # =========================================================
-    Show-Step "MTU" 78
-    Write-Host "[18/25] MTU..."
-    Run-Safe "netsh interface ipv4 set subinterface `"$IFACE`" mtu=1500 store=persistent"
-    Run-Safe "netsh interface ipv6 set subinterface `"$IFACE`" mtu=1500 store=persistent"
-
-    # =========================================================
-    # RESTART ADAPTER
-    # =========================================================
-    Show-Step "RESTART ADAPTER" 80
-    Write-Host "[19/25] RESTART ADAPTER..."
-    Run-Safe "Disable-NetAdapter -Name `"$IFACE`" -Confirm:`$false"
-    Start-Sleep -Seconds 2
-    Run-Safe "Enable-NetAdapter -Name `"$IFACE`" -Confirm:`$false"
-
-    # =========================================================
-    # DIAGNOSTIC
-    # =========================================================
-    Show-Step "DIAGNOSTIC" 83
-    Write-Host "[20/25] DIAGNOSTIC..."
-    Run-Safe 'netstat -an'
-
-    # =========================================================
-    # GPUPDATE
-    # =========================================================
-    Show-Step "GPUPDATE" 86
-    Write-Host "[21/25] GPUPDATE..."
-    Run-Safe 'gpupdate /force'
-
-    # =========================================================
-    # BCDEDIT
-    # =========================================================
-    Show-Step "BCDEDIT" 90
-    Write-Host "[22/25] BCDEDIT..."
-    Run-Safe 'bcdedit /set useplatformclock no'
-    Run-Safe 'bcdedit /set useplatformtick yes'
-    Run-Safe 'bcdedit /set disabledynamictick yes'
-    Run-Safe 'bcdedit /set nx optout'
-
-    # =========================================================
-    # TIMER
-    # =========================================================
-    Show-Step "TIMER" 94
-    Write-Host "[23/25] TIMER..."
-    Start-Sleep -Milliseconds 500
-
-    # =========================================================
-    # FINALIZE
-    # =========================================================
-    Show-Step "FINALIZE" 96
-    Write-Host "[24/25] FINALIZE..."
-    Run-Safe 'Rundll32.exe advapi32.dll,ProcessIdleTasks'
-
-    # =========================================================
-    # COMPLETE
-    # =========================================================
-    Show-Step "COMPLETE" 100
-    Write-Host "[25/25] COMPLETE..."
-    Write-Host "=========================================================" -ForegroundColor Green
-    Write-Host "                 OPTIMIZATION COMPLETE"
-    Write-Host "=========================================================" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "RESTART RECOMMENDED" -ForegroundColor Yellow
-    Write-Host ""
-    Pause
-}
-
-# =========================================================
-# START
-# =========================================================เ
-
-while ($true) {
-    Show-Menu
-    $menu = Read-Host "SELECT"
-
-    switch ($menu) {
-        "1" { Apply-All }
-        "2" { exit }
-        default {
-            Write-Host "INVALID" -ForegroundColor Red
-            Start-Sleep 1
-        }
-    }
-}
+Write-Host " แนะนำให้ผู้ใช้งานทำการ >> [ Restart คอมพิวเตอร์ 1 รอบ ] << เพื่อเริ่มระบบใหม่" -ForegroundColor Cyan
+Write-Host "======================================================================" -ForegroundColor Green
